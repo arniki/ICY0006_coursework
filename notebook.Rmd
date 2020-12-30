@@ -1,0 +1,647 @@
+---
+title: "Hotel Booking Demand Dataset Analysis"
+author: "ICY0006 Artur Nikitchuk IVSB192932"
+output:
+  html_document:
+    keep_md: yes
+  html_notebook: default
+  pdf_document: default
+fontsize: 12pt
+---
+
+The topic of this analysis is to analyze Portugal hotels booking demand and make certain predictions based on the analysis of the data.
+
+The dataset was taken from [Kaggle.com](https://www.kaggle.com/jessemostipak/hotel-booking-demand)
+<br>
+<br>
+<br>
+
+## Overview of Data
+<br>
+Included data is:
+
+
+Name of the column  | Description
+------------- | -------------
+**hotel** | either Resort Hotel or City Hotel
+**is_cancelled** | Value indicating if the booking was cancelled (1) or not (0)
+**lead_time** | Number of days that elapsed between the date of booking and the arrival date
+**arrival_date_year** | Year of arrival date
+**arrival_date_month** | Month of arrival date
+**arrival_date_week_number** | Week number of year for arrival date
+**arrival_date_day_of_month** | Day of arrival date
+**stays_in_weekend_nights** | Number of weekend nights (Saturday or Sunday) stayed or booked to stay at the hotel
+**stays_in_week_nights** | Number of week nights (Monday to Friday) the guest stayed or booked to stay at the hotel
+**adults** | Number of adults
+**children** | Number of children
+**babies** | Number of babies
+**meal**| Type of meal booked. Categories are presented in standard hospitality meal packages: Undefined/SC – no meal package; BB – Bed & Breakfast; HB – Half board (breakfast and one other meal – usually dinner); FB – Full board (breakfast, lunch and dinner)
+**country** | Country of origin. Categories are represented in the ISO 3155–3:2013 format
+**market_segment** | Market segment designation. Term “TA” means “Travel Agents” and “TO” means “Tour Operators”
+**distribution_channel** | Booking distribution channel. The term “TA” means “Travel Agents” and “TO” means “Tour Operators”
+**is_repeated_guest** | Value indicating if the booking name was from a repeated guest (1) or not (0)
+**previous_cancellations** | Number of previous bookings that were cancelled by the customer prior to the current booking
+**previous_bookings_not_canceled** | Number of previous bookings not cancelled by the customer prior to the current booking
+**reserved_room_type** | Code of room type reserved. Code is presented instead of designation for anonymity reasons.
+**assigned_room_type** | Code for the type of room assigned to the booking. Sometimes the assigned room type differs from the reserved room type due to hotel operation reasons (e.g. overbooking) or by customer request. Code is presented instead of designation for anonymity reasons.
+**booking_changes** | Number of changes/amendments made to the booking from the moment the booking was created until the moment of check|in or cancellation.
+**deposit_type** | Indication on if the customer made a deposit to guarantee the booking. This variable can assume three categories: No Deposit – no deposit was made; Non Refund – a deposit was made in the value of the total stay cost; Refundable – a deposit was made with a value under the total cost of stay. 
+**agent** | ID of the travel agency that made the booking
+**company** | ID of the company/entity that made the booking or responsible for paying the booking.
+**days_in_waiting_list** | Number of days the booking was in the waiting list before it was confirmed to the customer
+**customer_type** | Type of booking, assuming one of four categories: Contract- when the booking has an allotment or other type of contract associated to it; Group – when the booking is associated to a group; Transient – when the booking is not part of a group or contract, and is not associated to other transient booking; Transient-party – when the booking is transient, but is associated to at least other transient booking
+**adr** | Average Daily Rate as defined by dividing the sum of all lodging transactions by the total number of staying nights
+**required_car_parking_spaces** | Number of car parking spaces required by the customer
+**total_of_special_requests** | Number of special requests made by the customer (e.g. twin bed or high floor)
+**reservation_status** | Reservation last status, assuming one of three categories: Canceled – booking was canceled by the customer; Check|Out – customer has checked in but already departed; No|Show – customer did not check|in and did inform the hotel of the reason why.
+**reservation_status_date** | Date at which the last status was set. This variable can be used in conjunction with the ReservationStatus to understand when was the booking cancelled or when did the customer checked|out of the hotel.
+
+Lets import the dataset and have a look at the data itself.
+```{r}
+library(dplyr)
+library(tibble)
+library(ggcorrplot)
+library(ggplot2)
+hotel_data <- read.csv('data.csv')
+str(hotel_data)
+summary(hotel_data)
+```
+
+<br>
+<br>
+
+## Dealing with missing values
+
+We can see that there are 4 missing values in 'Children' column. 
+Lets see where these missing values are.
+```{r}
+n <- length(hotel_data$children)
+for (i in 1:n) {
+  if (is.na(hotel_data$children[i]))
+    cat("Missing value found at line: ", i, "\n")
+}
+```
+
+Lets assume, that if the column is missing, then there were no children and replace missing values with 0.
+```{r}
+n <- length(hotel_data$children)
+for (i in 1:n) {
+  if (is.na(hotel_data$children[i]))
+    hotel_data$children[i] <- 0
+}
+```
+
+
+Also column agent seems to have half of data equal to NULL. Lets drop the whole column.
+```{r}
+hotel_data$agent <- NULL 
+```
+Under "meal" column, there are 1169 undefined. For convenience, lets change undefined ones to SC(which both mean no meal package) and remove the undefined level.
+```{r}
+hotel_data$meal <-replace(hotel_data$meal,hotel_data$meal=='Undefined','SC')
+hotel_data$meal <- factor(hotel_data$meal)
+```
+
+<br>
+<br>
+
+## Basic Visual Graphs
+
+
+There two types of hotels: Resort Hotel and City Hotel
+```{r}
+table(hotel_data$hotel)
+```
+<br>
+And lets turn the numbers into something more beautiful to look at:
+
+```{r}
+hotel_table <-table(hotel_data$hotel)
+hotel_bar <-barplot(hotel_table, main='Amount of Hotels', col='light blue')
+text(hotel_bar, 0, hotel_table, cex=1,pos=3 )
+```
+
+There are 79330/40060≈**1.98** times more City Hotels over Resort Hotels.
+<br>
+<br>
+Amount of bookings by year
+
+```{r}
+hotel_bar <- barplot(table(hotel_data$arrival_date_year), main='Amount of Bookings by year', col='light blue')
+text(hotel_bar, 0, table(hotel_data$arrival_date_year), cex=1,pos=3 )
+```
+The year 2016 had the most bookings
+<br>
+<br>
+Amount of bookings by month
+```{r}
+library(ggplot2)
+require(forcats)
+
+ggplot(data = hotel_data, aes(x = fct_infreq(arrival_date_month))) +
+  geom_bar(stat = "count", fill='light blue') +
+  geom_text(stat = "count", aes(label = ..count..), hjust = 1,size=4) +
+  coord_flip() + labs(title = "Amount of bookings per month",
+                      x = "Month",
+                      y = "Count") + 
+  theme(axis.text.x = element_text(face="bold", size=11),axis.text.y = element_text(face="bold", size=11))
+
+```
+Top 3 months by the amount of bookings are May, July and August.
+
+
+
+Lets have a look at the countries 
+```{r}
+library(dplyr)
+hotel_data%>%
+  group_by(country)%>%
+  summarise(num=n())%>%
+  arrange(desc(num))
+```
+We can see that most visitors come from Portugal. Then come visitors from other European countries like The United Kingdom, France, Spain and Germany.
+<br>
+
+Lets visualize, how many people are coming from Portugal, and how many people are coming from foreign countries.
+
+```{r}
+
+Portugal <- round(mean(hotel_data$country == "PRT"), 3) * 100
+not_Portugal <- round(mean(hotel_data$country != "PRT"), 3) * 100
+df <- data.frame(
+  countries=c("Portugal", "Other Countries"),
+  percentage=c(Portugal,not_Portugal)
+)
+
+ggplot(data = df, aes(x=countries, y=percentage)) + 
+  geom_bar(stat = "identity", fill="light blue")
+
+```
+As we can see, over 40% of visitors are from Portugal.
+<br>
+<br>
+
+## Cancellations
+<br>
+
+
+Lets have a look at cancellations by a hotel type.
+```{r}
+ggplot(data = hotel_data,aes(x = hotel,y = prop.table(stat(count)),fill = factor(is_canceled),
+         label = scales::percent(prop.table(stat(count))))) +
+
+geom_bar(position = position_dodge()) +
+  
+geom_text(stat = "count",position = position_dodge(.9),vjust = -0.5,size = 3) +
+
+theme(axis.text.x = element_text(face="bold", size=12),axis.text.y = element_text(face="bold", size=12))+
+
+scale_y_continuous(labels = scales::percent) +
+  
+labs(title = "Cancellation Percent by Hotel Type",x = "Hotel Type",y = "Count") +
+
+scale_fill_manual(
+    name = "Booking Status",
+    breaks = c("0", "1"),
+    labels = c("Not Cancelled", "Cancelled"),
+    values = c("0" = "light blue", "1"="pink")
+  )
+```
+It is clear that Resort Hotel cancel ratio is way smaller than for city hotels.
+
+<br>
+<br>
+
+
+General reservation status overview.
+```{r}
+hotel_bar <- barplot(table(hotel_data$reservation_status), main='Reservation Status', col='light blue')
+text(hotel_bar, 0, table(hotel_data$reservation_status), cex=1,pos=3 )
+```
+Most clients, around ((43017+1207)/75166)×100≈**58.84%** get to check-out. 
+<br>
+<br>
+
+
+Distribution type plays a role in cancellation. From the graph it can be seen that most bookings are made by travel agencies or travel organisations, they also have the highest percent of cancellations.
+```{r}
+ ggplot(hotel_data,aes(x=factor(distribution_channel),fill=factor(is_canceled)))+
+             geom_bar()+theme(axis.text.x = element_text(face="bold", size=15),
+             axis.text.y = element_text(face="bold", size=15))+
+  
+             labs(
+                title = "Cancellation based on Distribution Type",
+                x = "Distribution Type",
+                y = "No. of Bookings",size=15) +
+
+
+            scale_fill_manual(
+                name = "Booking Status",
+                breaks = c("0", "1"),
+                labels = c("Not Cancelled", "Cancelled"),
+                values = c("0" = "light blue", "1"="pink")
+  )
+
+```
+
+<br>
+<br>
+Lets do some calculations and, for the sake of our convenience, add some precalculated columns. ADR basically means average cost per night. Lets add two more columns: total nights stayed, and total cost for all of the nights.
+```{r}
+hotel_data <- mutate(hotel_data,
+       stay_nights_total = stays_in_weekend_nights + stays_in_week_nights,
+       stay_cost_total = adr * stay_nights_total)
+```
+<br>
+Minimal, median, mean and max price of stays:
+```{r}
+t <- subset(hotel_data, subset = hotel_data$stay_cost_total > 0)
+summary(t$stay_cost_total)
+```
+<br>
+
+Total density plot of Price per night for non-canceled bookings.
+
+```{r}
+t <- subset(t, subset = t$is_canceled == 0)
+summary(t$stay_cost_total)
+p <- ggplot(t, aes(x=stay_cost_total, y=..count..)) + 
+  geom_density()+
+  xlim(-15,1000)+
+  labs(
+       x = "Price per night (in Euro)",
+       y="Count",
+       subtitle = "Mean value = 354.1")
+  
+p+ geom_vline(aes(xintercept=mean(stay_cost_total)),
+            color="blue", linetype="dashed", size=1)
+```
+
+
+
+Density plot of price per night by hotel for non-cancelled bookings with means and medians.
+
+City hotel:
+```{r}
+nc_city_hotel   <- subset(t, subset = t$hotel != "Resort Hotel")
+nc_resort_hotel <- subset(t, subset = t$hotel == "Resort Hotel")
+
+summary(nc_city_hotel$stay_cost_total)
+```
+<br>
+Resort hotel:
+```{r}
+summary(nc_resort_hotel$stay_cost_total)
+```
+
+
+
+```{r}
+ggplot(t, aes(x=stay_cost_total, y = ..count.., color=t$hotel)) +
+  geom_density()+
+  geom_vline(data=nc_city_hotel, aes(xintercept=median(nc_city_hotel$stay_cost_total), color=nc_city_hotel$hotel),
+             linetype="dashed")+
+  geom_vline(data=nc_resort_hotel, aes(xintercept=median(nc_resort_hotel$stay_cost_total), color=nc_resort_hotel$hotel),
+             linetype="dashed")+
+  xlim(-15, 1000)+
+  labs(x = "Total Cost per Hotel", title = "Density plot of price per night by hotel for non-cancelled bookings \nwith medians.", subtitle = "Dotted lines indicate medians\nCity Hotel median = 270.0 \nResort Hotel median =256.0", color="Hotel")
+```
+```{r}
+ggplot(t, aes(x=stay_cost_total, y = ..count.., color=t$hotel)) +
+  geom_density()+
+  geom_vline(data=nc_city_hotel, aes(xintercept=mean(nc_city_hotel$stay_cost_total), color=nc_city_hotel$hotel),
+             linetype="dashed")+
+  geom_vline(data=nc_resort_hotel, aes(xintercept=mean(nc_resort_hotel$stay_cost_total), color=nc_resort_hotel$hotel),
+             linetype="dashed")+
+  xlim(-15, 1000)+
+  labs(x = "Total Cost per Hotel", title = "Density plot of price per night by hotel for non-cancelled bookings \nwith means.", subtitle = "Dotted lines indicate means\nCity Hotel mean = 318.8 \nResort Hotel mean = 410.4", color="Hotel")
+```
+
+
+
+<br>
+<br>
+Lead time in days chart. Lead time means how many days in advance was the booking created.
+```{r}
+
+p <- ggplot(hotel_data, aes(x=hotel_data$lead_time, y=..count..)) + 
+  geom_density()+
+  xlim(-15,1000)+
+  labs(
+       x = "Lead time in days",
+       y="Count",
+       subtitle = "Median value = 69\nMean value = 104.01")+
+  xlim(-20, 670)
+  
+p+ geom_vline(aes(xintercept=median(lead_time)),
+            color="blue", linetype="dashed", size=1)+
+   geom_vline(aes(xintercept=mean(lead_time)),
+            color="red", linetype="dashed", size=1)
+```
+
+
+<br>
+<br>
+
+Amount of nights stayed total
+```{r}
+checked_out <- subset(hotel_data, subset = hotel_data$reservation_status == "Check-Out")
+
+p <- ggplot(checked_out, aes(x=checked_out$stay_nights_total, y=..count..)) + 
+  geom_bar(fill="light blue", position = position_dodge(width = 3))+
+  geom_text(stat = "count", aes(label = ..count..),size=4)+
+  xlim(-15,1000)+
+  labs(
+       x = "amount of days stayed",
+       y="Count",
+       subtitle = "Median value = 3\nMean value = 3.39")+
+  xlim(-2,20)
+  
+p+ geom_vline(aes(xintercept=median(stay_nights_total)),
+            color="blue", linetype="dashed", size=1)+
+   geom_vline(aes(xintercept=mean(stay_nights_total)),
+            color="red", linetype="dashed", size=1)
+```
+Most people prefer to stay 1-3 days.
+
+
+
+```{r, fig.width=8, fig.height=6}
+checked_out <- subset(hotel_data, subset = hotel_data$reservation_status == "Check-Out")
+
+p <- ggplot(checked_out, aes(x=checked_out$arrival_date_day_of_month, y=..count..)) + 
+  geom_bar(fill="light blue")+
+  geom_text(stat = "count", aes(label = ..count..),size=3)+
+  labs(
+       x = "amount of days stayed",
+       y="Count")
+p
+```
+Besides 31st day of the month, there is no preference, when it comes to choosing which day to arrive. The 31st dip can be explained by December 31st, when most people are probably already in a hotel.
+
+
+### A small interim summary
+
+- There are 79330/40060≈**1.98** times more City Hotels over Resort Hotels.
+- The year 2016 had almost double the amount of bookings compared to 2015
+- Top months for booking are: 
+     - August - 13877 
+     - July   - 12661 
+     - May    - 11791
+- Over 40% of visitors come from Portugal. It is safe to assume, that the provided booking data is from Portugal hotels. From remaining 60% of visiting countries, top countries include Great Britain, France, Spain, Germany, Italy.
+- For city hotels 27.7% of bookings get cancelled, for resort hotels only 9.3%. This can be, because city hotels are used more by locals, who can quickly change their mind regarding the hotel/trip, whereas most visitors to resort hotels are probably tourists, who need stability, when it comes to accommodation.
+- Only 58.84% of clients actually check-out.
+- Most bookings and cancellations are by travel agents/travel organisations
+- Mean price per night for non-cancelled bookings in city hotels is 318.8 euros. Mean for resort hotels is 410.4, 
+- Mean value of lead days (days leading to the booking) is 104.01, however most book 1-2 days in advance.
+- Most people stay for 3 days. 
+- Besides 31st day of the month, there is no preference, when it comes to choosing which day to arrive. The 31st dip can be explained by December 31st, when most people are probably already in a hotel.
+<br>
+<br>
+
+# Data Modelling
+### Correlations yay!
+
+
+Lets convert all factors to numeric and calculate our correlation coefficient between is_canceled variable and the others.
+
+```{r}
+
+hotel_data_numeric <- hotel_data %>% mutate_if(is.factor, as.numeric)
+
+canceled_cor <- data.frame(sapply(hotel_data_numeric, cor, y=hotel_data_numeric$is_canceled))
+colnames(canceled_cor) <- "coefficient"
+
+
+```
+
+Lets select only the features that have correlation coefficient between -0.1 and 0.1
+
+```{r}
+canceled_cor <- subset(canceled_cor, subset = canceled_cor$coefficient < -0.1 | canceled_cor$coefficient > 0.1)
+library(tibble)
+canceled_cor <-rownames_to_column(canceled_cor, var = "feature") %>% arrange(desc(coefficient))
+canceled_cor %>% knitr::kable()
+
+```
+Judging by the feature-coefficient table, it is clear that deposit type, lead time and country have the strongest correlation.
+Deposit type might influence people to cancel less. For example if a booking is made in a no-refund hotel, the client is more likely to actually go to that hotel. Hotel giving a refund gives the client more leeway in cancelling and re-deciding the hotel. Next one is lead time(days until the booking). The more days there is until the booking, the more time the client has to rethink the trip and there's more risk, that the client will find a better option. The third one is country. Previously it was mentioned, that the hotels are in Portugal. It might be that the Portuguese clients are less likely to cancel, because for them there are less things that might stop them from going to the hotel, while foreign tourists have more things that can influence their arrival to the hotel like cancelled flights or pandemics. 
+
+Lets only use the needed columns in our data and discard unnecessary ones and print correlation plot
+```{r}
+hotel_data_numeric <- hotel_data_numeric %>% select(canceled_cor$feature)
+
+ggcorrplot(cor(hotel_data_numeric), hc.order = TRUE)
+
+```
+Reservation status leaks data to is_canceled column, so we should remove it. Also, reservation_status_date doesn't really give us any info, we should remove that too.
+
+```{r fig.width=8, fig.height=8}
+hotel_data_numeric$reservation_status <- NULL
+hotel_data_numeric$reservation_status_date <- NULL
+ggcorrplot(cor(hotel_data_numeric), hc.order = TRUE, lab = TRUE)
+```
+
+
+
+Lets try to draw a scatter plot between is_canceled and lead_time
+```{r}
+plot(is_canceled~lead_time, data=hotel_data_numeric, col="light blue")
+```
+Looking at the plot, it is clear that, linear regression is not applicable here and we should turn to logistic regression. This is because the is_cancelled feature can only be either a 0 or 1. 
+
+
+Lets split our dataset into two sets: 70% is training set, and 30% is testing set.
+Next, lets train the regression model on our training set.
+
+```{r}
+
+set.seed(1337)   
+
+index <- sample(nrow(hotel_data_numeric), nrow(hotel_data_numeric)*0.3) 
+
+test <- hotel_data_numeric[index,]       
+training <-hotel_data_numeric[-index,]  
+
+train_model <- glm(is_canceled~., family = "binomial", data=training)
+
+# IDK why but when this is included in the notebook, the notebook glitches and nothing after the summary is being shown :( 
+#summary(train_model)
+
+```
+and now lets test our model on a testing set.
+
+```{r}
+
+test$probability <- predict(train_model, test, type="response")
+test$prediction <- ifelse(test$probability>0.5, "1" ,"0") 
+
+mean(test$is_canceled == test$prediction)
+
+table(test$is_canceled == test$prediction)
+
+```
+
+
+Logistic regression shows an accuracy of 76.9%
+
+
+Lets have a look at ROC and AUC parameters
+
+```{r}
+library(pROC)
+test$is_canceled <- as.numeric(test$is_canceled)
+test$prediction <- as.numeric(test$prediction)
+ROC <- roc(test$is_canceled, test$prediction)
+plot(ROC, col='light blue')
+```
+
+And lets have a look at the AUC value:
+```{r}
+auc(ROC)
+```
+AUC - ROC curve is a performance measurement for classification problem at various thresholds settings. ROC is a probability curve and AUC represents degree or measure of separability. It tells how much model is capable of distinguishing between classes. Higher the AUC, better the model is at predicting 0s as 0s and 1s as 1s. So basically our model coud predict around 70% right, which is quite good!
+
+
+
+# Lottery probability
+
+The Powerball lotto is made up of 6 total numbers randomly selected twice per week.
+The first 5 numbers (white) are between 1 and 69. The final number (red) is called the Powerball. It can be anywhere between 1 and 26. 
+When purchasing a ticket, players can select all 6 numbers themselves or do a "quick pick" and receive a randomly generated set of numbers.
+
+
+#### n! / r! (n-r)!
+n - amount of numbers to select from is 69 and 26 for Powerball. <br>
+r - how many we can select (e.g. 5 or 1 for Powerball number).
+ 
+### Top prize: 5 correct numbers + 1 correct powerball - all five numbers and powerball are correctly guessed:
+First lets calculate possible combinations for first 5 numbers
+
+```
+69! / 5! * (69 - 5)! = 11,238,513
+```
+ 
+For powerball the probability is 1/26.
+Therefore, for us to calculate the probability of winning the lottery, we need to calculate the probability of picking first 5 numbers correctly (1 in 11,238,513) and the powerball (1 in 26). This can be achieved by a simple multiplication.
+
+```
+1 / 11,238,513 * 1 / 26 = 1 / 292,201,338
+```
+  
+
+ 
+### Second prize: 5 + 0 - all five numbers have to be guessed and Powerball not guessed
+The probability to guess 5 numbers is the same as above:
+
+```
+1/11,238,513
+```
+
+Now lets calculate the probability of not choosing the right powerball number. There are **26-1=25** incorrect numbers to choose.
+So, the probablity is 25/26. Lets do a similar multiplication again:
+
+```
+1 / 11,238,513 * 25 / 26 = 25/ 292,201,338 = 1/11,688,053.52
+```
+
+
+
+### Third prize: 4 + 1 - guess 4 out of 5 selected numbers + powerball number
+ 
+Previously it was calculated that the amount of combinations is 11,238,513
+Powerball probability is 1/26
+lets calculate the number of ways in which 4 numbers can be chosen correctly
+out of 5 numbers drawn.
+
+```
+5!/4!*1! * 64!/63!*1! = 320
+```
+The chances are 320 in 11,238,513 of correctly choosing 4 out of 5 numbers in the first part. 
+Now lets add the possibility of picking the right powerball
+ 
+```
+320 * 1/11,238,513 * 1/26 = 1/913,129.18125
+```
+
+ 
+ 
+### Fourth prize: 4 + 0 - guess 4 out of 5 selected numbers and no powerball number
+ 
+Lets use the same logic as above:
+
+```
+320 * 1/11,238,513 * 25/26 = 36,525.16725
+```
+
+
+
+### Fifth prize: 3 + 1 - guess 3 out of 5 selected numbers + powerball number
+There are 20,160 different ways in which 3 numbers out of 5 can be drawn:
+
+```
+5!/3!*2! * 64!/62!*2! = 20,160
+```
+
+3 out of 5 + powerball
+
+```
+20,160 * 1/11,238,513 * 1/26 = 1/14,494
+```
+
+
+
+### Sixth prize: 3 + 0 - guess 3 out of 5 selected numbers and no powerball number
+ 
+```
+20,160 * 1/11,238,513 * 25/26 = 1/579
+```
+
+
+### Seventh prize: 2 + 1 - guess 2 out of 5 selected numbers + powerball number
+
+Guess 2 out of 5
+
+```
+5!/2!*3! * 64!/61!*3! = 416,640
+```
+
+2 out of 5 + powerball
+
+```
+416,640 * 1/11,238,513 * 1/26 = 1/701.33
+```
+
+
+
+### Eigth prize: 1 + 1 - guess 1 out of 5 selected numbers + powerball number
+
+Guess 1 out of 5
+
+```
+5!/1!*4! * 64!/60!*4! = 3,176,880
+```
+
+1 out of 5 + powerball
+
+```
+3,176,880 * 1/11,238,513 * 1/26 = 1/92
+
+```
+
+
+### Last prize: 0 + 1 - guess 0 out of 5 selected numbers + powerball number
+
+Guess 0 out of 5
+
+```
+5!/0!*5! * 64!/59!*5! = 7,624,512
+```
+
+0 out of 5 + powerball
+
+```
+7,624,512 * 1/11,238,513 * 1/26 = 1/38.32
+```
+
+Looking a the numbers, it is clear why most people lose; infact, that is the whole business-scheme of lottery businesses. Make people believe
