@@ -2,9 +2,9 @@
 title: "Hotel Booking Demand Dataset Analysis"
 author: "ICY0006 Artur Nikitchuk IVSB192932"
 output:
+  html_notebook: default
   html_document:
     keep_md: yes
-  html_notebook: default
   pdf_document: default
 fontsize: 12pt
 ---
@@ -446,9 +446,26 @@ ggcorrplot(cor(hotel_data_numeric), hc.order = TRUE, lab = TRUE)
 
 Lets try to draw a scatter plot between is_canceled and lead_time
 ```{r}
-plot(is_canceled~lead_time, data=hotel_data_numeric, col="light blue")
+p <- plot(is_canceled~lead_time, data=hotel_data_numeric, col="light blue", yaxt = "n")
+
+ytick<-seq(0, 1, by=1)
+axis(side=2, at=ytick, labels = FALSE)
+text(par("usr")[1], ytick,  
+     labels = ytick, srt = 90, pos = 2, xpd = TRUE)
 ```
 Looking at the plot, it is clear that, linear regression is not applicable here and we should turn to logistic regression. This is because the is_cancelled feature can only be either a 0 or 1. 
+The difference between logistic and linear regression:
+
+Logistic regression  | Linear regression
+------------- | -------------
+Logistic Regression is used to predict the categorical dependent variable using a given set of independent variables.|Linear regression is used to predict the continuous dependent variable using a given set of independent variables.
+Logistic regression is used for solving Classification problems.|Linear Regression is used for solving Regression problem.
+Maximum likelihood estimation method is used for estimation of accuracy.|Least square estimation method is used for estimation of accuracy.
+The output of Logistic Regression must be a Categorical value such as 0 or 1, Yes or No, etc.|The output for Linear Regression must be a continuous value, such as price, age, etc.
+In Logistic regression, it is not required to have the linear relationship between the dependent and independent variable.|In Linear regression, it is required that relationship between dependent variable and independent variable must be linear.
+In logistic regression, there should not be collinearity between the independent variable.|In linear regression, there may be collinearity between the independent variables.
+In logistic Regression, we predict the values of categorical variables.|In Linear regression, we predict the value of continuous variables.
+
 
 
 Lets split our dataset into two sets: 70% is training set, and 30% is testing set.
@@ -460,10 +477,10 @@ set.seed(1337)
 
 index <- sample(nrow(hotel_data_numeric), nrow(hotel_data_numeric)*0.3) 
 
-test <- hotel_data_numeric[index,]       
-training <-hotel_data_numeric[-index,]  
+test <- hotel_data_numeric[index,] # assign 30% of data to our test variable      
+training <-hotel_data_numeric[-index,] # assign remaining 70% of data to our training variable
 
-train_model <- glm(is_canceled~., family = "binomial", data=training)
+train_model <- glm(is_canceled~., family = "binomial", data=training) # Do the training
 
 # IDK why but when this is included in the notebook, the notebook glitches and nothing after the summary is being shown :( 
 #summary(train_model)
@@ -473,10 +490,10 @@ and now lets test our model on a testing set.
 
 ```{r}
 
-test$probability <- predict(train_model, test, type="response")
-test$prediction <- ifelse(test$probability>0.5, "1" ,"0") 
+test$probability <- predict(train_model, test, type="response") # store the prediction probability in the probability column
+test$prediction <- ifelse(test$probability>0.5, "1" ,"0") # pick only predictions, that have a probability over 50% and use them as predictions
 
-mean(test$is_canceled == test$prediction)
+mean(test$is_canceled == test$prediction) # have a look at reality and predictions
 
 table(test$is_canceled == test$prediction)
 
@@ -486,11 +503,13 @@ table(test$is_canceled == test$prediction)
 Logistic regression shows an accuracy of 76.9%
 
 
-Lets have a look at ROC and AUC parameters
+Lets have a look at ROC and AUC parameters, but first lets convert them to numeric values.
+The graph shows the performance of our model at different thresholds (sensitivity vs specificity). 
+Sensitivity shows us the true positive rate and specificity shows us the false positive rate.
 
 ```{r}
 library(pROC)
-test$is_canceled <- as.numeric(test$is_canceled)
+test$is_canceled <- as.numeric(test$is_canceled) 
 test$prediction <- as.numeric(test$prediction)
 ROC <- roc(test$is_canceled, test$prediction)
 plot(ROC, col='light blue')
@@ -500,7 +519,7 @@ And lets have a look at the AUC value:
 ```{r}
 auc(ROC)
 ```
-AUC - ROC curve is a performance measurement for classification problem at various thresholds settings. ROC is a probability curve and AUC represents degree or measure of separability. It tells how much model is capable of distinguishing between classes. Higher the AUC, better the model is at predicting 0s as 0s and 1s as 1s. So basically our model coud predict around 70% right, which is quite good!
+AUC - ROC curve is a performance measurement for classification problem at various thresholds settings. ROC is a probability curve and AUC represents degree or measure of separability. It tells how much model is capable of distinguishing between classes. Higher the AUC, better the model is at predicting 0s as 0s and 1s as 1s.(Sarang Narkhede, 2018) So basically our model coud predict around 70% right, which is quite good!
 
 
 
@@ -644,4 +663,8 @@ Guess 0 out of 5
 7,624,512 * 1/11,238,513 * 1/26 = 1/38.32
 ```
 
-Looking a the numbers, it is clear why most people lose; infact, that is the whole business-scheme of lottery businesses. Make people believe
+Looking a the numbers, it is clear why most people lose; infact, that is the whole business-scheme of lottery businesses. Make people believe they can win, and make them do emotion-driven purchases.
+
+
+sources:
+Sarang Narkhede (2018 June 26). Understanding AUC - ROC Curve. https://towardsdatascience.com/understanding-auc-roc-curve-68b2303cc9c5
